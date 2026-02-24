@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WalkMap.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f1fe6e3fd7481baea7ebe5c1d7cbe64d9b000538")]
 [assembly: System.Reflection.AssemblyProductAttribute("WalkMap.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WalkMap.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
