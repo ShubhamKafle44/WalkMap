@@ -1,43 +1,58 @@
-# ======================
+# ==========================================
+# OS Files
+# ==========================================
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# IDE / Editors
+# ==========================================
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# ==========================================
 # Node / React (Frontend)
-# ======================
-frontend/node_modules
-frontend/.pnp
+# ==========================================
+frontend/node_modules/
+frontend/.pnp/
 frontend/.pnp.js
-frontend/.env
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
-frontend/coverage
-frontend/build
+frontend/coverage/
+frontend/build/
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
+frontend/.env*
 frontend/.DS_Store
 
-# ======================
+# ==========================================
 # .NET / ASP.NET Core (Backend)
-# ======================
-backend/bin/
-backend/obj/
-backend/out/
-backend/*.user
-backend/*.suo
-backend/*.userosscache
-backend/*.sln.docstates
+# ==========================================
 
-# IDEs and editors
-.vscode/
-.idea/
+# Ignore ALL bin/ and obj folders recursively
+**/bin/
+**/obj/
+**/out/
 
-# Backend secrets
-backend/appsettings.*.json
+# Logs
+*.log
 
-# ======================
-# Environment / Config
-# ======================
-# Ignore any .env file anywhere
+# ==========================================
+# Backend Secrets
+# ==========================================
+
+# Keep base appsettings.json
+# Ignore environment-specific secrets
+backend/**/appsettings.Development.json
+backend/**/appsettings.Local.json
+
+# ==========================================
+# Environment Files
+# ==========================================
 *.env
 *.env.local
 *.env.development.local
