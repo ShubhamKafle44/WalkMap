@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WalkMap.Api.DTOs;
@@ -12,15 +14,18 @@ namespace WalkMap.Api.Controllers;
 public class WalksController : ControllerBase
 {
     private readonly IWalkService _walks;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _config;
 
-    public WalksController(IWalkService walks)
+    public WalksController(IWalkService walks, IHttpClientFactory httpClientFactory, IConfiguration config)
     {
         _walks = walks;
+        _httpClientFactory = httpClientFactory;
+        _config = config;
     }
 
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    // GET api/walks
     [HttpGet]
     public async Task<ActionResult<IEnumerable<WalkSummaryDto>>> GetHistory()
     {
@@ -28,22 +33,13 @@ public class WalksController : ControllerBase
         return Ok(walks);
     }
 
-    // GET api/walks/{id}
     [HttpGet("{id}")]
     public async Task<ActionResult<WalkDetailDto>> GetById(int id)
     {
-        try
-        {
-            var walk = await _walks.GetWalkByIdAsync(UserId, id);
-            return Ok(walk);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        try { return Ok(await _walks.GetWalkByIdAsync(UserId, id)); }
+        catch (KeyNotFoundException) { return NotFound(); }
     }
 
-    // POST api/walks/start
     [HttpPost("start")]
     public async Task<ActionResult<WalkSummaryDto>> Start([FromBody] StartWalkRequest request)
     {
@@ -51,41 +47,47 @@ public class WalksController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = walk.Id }, walk);
     }
 
-    // PUT api/walks/{id}/end
     [HttpPut("{id}/end")]
     public async Task<ActionResult<WalkDetailDto>> End(int id, [FromBody] EndWalkRequest request)
     {
-        try
-        {
-            var walk = await _walks.EndWalkAsync(UserId, id, request);
-            return Ok(walk);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        try { return Ok(await _walks.EndWalkAsync(UserId, id, request)); }
+        catch (KeyNotFoundException) { return NotFound(); }
     }
 
-    // DELETE api/walks/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        try
-        {
-            await _walks.DeleteWalkAsync(UserId, id);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        try { await _walks.DeleteWalkAsync(UserId, id); return NoContent(); }
+        catch (KeyNotFoundException) { return NotFound(); }
     }
 
-    // POST api/walks/generate-route
     [HttpPost("generate-route")]
-    public ActionResult<RouteGenerateResponse> GenerateRoute([FromBody] RouteGenerateRequest request)
+    [AllowAnonymous] // temporary until auth is sorted
+    public async Task<IActionResult> GenerateRoute([FromBody] GenerateRouteRequest req)
     {
-        var route = _walks.GenerateRoute(request);
-        return Ok(route);
+        var orsRequest = new
+        {
+            coordinates = new List<List<double>>
+        {
+            new() { req.StartLng, req.StartLat },
+            new() { req.StartLng + 0.01, req.StartLat + 0.01 }
+        },
+            instructions = false
+        };
+
+        var content = new StringContent(
+            JsonSerializer.Serialize(orsRequest), Encoding.UTF8, "application/json");
+
+        var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", _config["OpenRouteService:ApiKey"]);
+        var res = await client.PostAsync(
+            "https://api.openrouteservice.org/v2/directions/foot-walking/geojson", content);
+
+        var body = await res.Content.ReadAsStringAsync();
+
+        if (!res.IsSuccessStatusCode)
+            return StatusCode((int)res.StatusCode, $"ORS error: {body}");
+
+        return Content(body, "application/json");
     }
 }

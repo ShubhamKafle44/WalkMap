@@ -45,8 +45,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-                builder.Configuration["Cors:AllowedOrigin"] ?? "http://localhost:3000")
+        policy.SetIsOriginAllowed(origin =>
+                  new Uri(origin).Host == "localhost")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -62,6 +62,7 @@ builder.Services.AddScoped<IWalkService, WalkService>();
 // Controllers + Swagger
 // ──────────────────────────────────────────────
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
