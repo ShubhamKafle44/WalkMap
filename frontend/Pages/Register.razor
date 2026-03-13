@@ -1,0 +1,54 @@
+@page "/register"
+@layout MainLayout
+@inject AuthService AuthService
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Register – WalkMap</PageTitle>
+
+<div class="auth-card">
+    <div class="auth-logo">W</div>
+    <h1 class="auth-title">Create account</h1>
+    <p class="auth-sub">Start tracking your walks today</p>
+
+    @if (error != "")
+    {
+        <div class="form-error">@error</div>
+    }
+
+    <div class="field">
+        <label>Username</label>
+        <input type="text" @bind="username" placeholder="Your name" />
+    </div>
+    <div class="field">
+        <label>Email</label>
+        <input type="email" @bind="email" placeholder="you@example.com" />
+    </div>
+    <div class="field">
+        <label>Password</label>
+        <input type="password" @bind="password" placeholder="••••••••" />
+    </div>
+
+    <button class="btn-primary" @onclick="Submit" disabled="@busy">
+        @if (busy) { <span class="spin"></span> } else { <span>Create Account</span> }
+    </button>
+
+    <p class="auth-switch">Already have an account? <a href="/login">Sign in</a></p>
+</div>
+
+@code {
+    string username = "", email = "", password = "", error = "";
+    bool busy;
+
+    async Task Submit()
+    {
+        error = "";
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        { error = "Please fill in all fields."; return; }
+        busy = true;
+        var (data, err) = await AuthService.RegisterAsync(new() { Username = username, Email = email, Password = password });
+        busy = false;
+        if (data != null) { await Auth.SetAuthAsync(data); Nav.NavigateTo("/"); }
+        else error = err ?? "Registration failed.";
+    }
+}

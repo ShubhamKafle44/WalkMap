@@ -1,0 +1,102 @@
+@page "/walks"
+@inject WalkService WalkService
+@inject NavigationManager Nav
+
+<PageTitle>My Walks - WalkMap</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>My Walks</h1>
+        <p>All recorded walks</p>
+    </div>
+    <a href="/walk/start" class="btn-primary">+ New Walk</a>
+</div>
+
+@if (loading)
+{
+    <div class="loading-center">
+        <div class="spin large"></div>
+    </div>
+}
+else if (!walks.Any())
+{
+    <div class="empty">
+        <p>No walks yet. <a href="/walk/start">Start one now!</a></p>
+    </div>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Date</th>
+                    <th>Distance</th>
+                    <th>Steps</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var w in walks.OrderByDescending(x => x.StartedAt))
+                {
+                    var walkId = w.Id;
+                    <tr class="trow" @onclick="@(e => GoToWalk(walkId))">
+                        <td><strong>@w.Title</strong></td>
+                        <td>@w.StartedAt.ToString("MMM d, yyyy")</td>
+                        <td>@w.TotalDistanceKm.ToString("F2") km</td>
+                        <td>@w.StepCount.ToString("N0")</td>
+                        <td>@((w.DurationMinutes ?? 0).ToString("F0")) min</td>
+                        <td>
+                            <span class="status-pill @(w.EndedAt.HasValue ? "done" : "active")">
+                                @(w.EndedAt.HasValue ? "Completed" : "Active")
+                            </span>
+                        </td>
+                        <td @onclick:stopPropagation="true">
+                            <button class="del-btn" @onclick="@(e => AskDelete(walkId))">X</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (confirmId > 0)
+{
+    <div class="modal-bg" @onclick="CancelDelete">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <h3>Delete this walk?</h3>
+            <p>This action cannot be undone.</p>
+            <div class="modal-btns">
+                <button class="btn-ghost" @onclick="CancelDelete">Cancel</button>
+                <button class="btn-danger" @onclick="DoDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    List<WalkSummaryDto> walks = new();
+    bool loading = true;
+    int confirmId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        walks = await WalkService.GetAllAsync();
+        loading = false;
+    }
+
+    void GoToWalk(int id) => Nav.NavigateTo("/walks/" + id);
+    void AskDelete(int id) => confirmId = id;
+    void CancelDelete() => confirmId = 0;
+
+    async Task DoDelete()
+    {
+        await WalkService.DeleteAsync(confirmId);
+        walks.RemoveAll(w => w.Id == confirmId);
+        confirmId = 0;
+    }
+}

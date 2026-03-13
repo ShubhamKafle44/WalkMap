@@ -1,0 +1,58 @@
+@page "/login"
+@layout MainLayout
+@inject AuthService AuthService
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Sign In – WalkMap</PageTitle>
+
+<div class="auth-card">
+    <div class="auth-logo">W</div>
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-sub">Sign in to your WalkMap account</p>
+
+    @if (error != "")
+    {
+        <div class="form-error">@error</div>
+    }
+
+    <div class="field">
+        <label>Email</label>
+        <input type="email" @bind="email" placeholder="you@example.com" />
+    </div>
+    <div class="field">
+        <label>Password</label>
+        <input type="password" @bind="password" placeholder="••••••••" @onkeydown="OnKey" />
+    </div>
+
+    <button class="btn-primary" @onclick="Submit" disabled="@busy">
+        @if (busy) { <span class="spin"></span> } else { <span>Sign In</span> }
+    </button>
+
+    <p class="auth-switch">No account? <a href="/register">Create one</a></p>
+</div>
+
+@code {
+    string email = "", password = "", error = "";
+    bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (Auth.IsAuthenticated) Nav.NavigateTo("/");
+    }
+
+    async Task OnKey(KeyboardEventArgs e) { if (e.Key == "Enter") await Submit(); }
+
+    async Task Submit()
+    {
+        error = "";
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        { error = "Please fill in all fields."; return; }
+        busy = true;
+        var (data, err) = await AuthService.LoginAsync(new() { Email = email, Password = password });
+        busy = false;
+        if (data != null) { await Auth.SetAuthAsync(data); Nav.NavigateTo("/"); }
+        else error = err ?? "Login failed.";
+    }
+}

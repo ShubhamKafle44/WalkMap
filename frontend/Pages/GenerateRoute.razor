@@ -1,0 +1,186 @@
+@page "/route/generate"
+@inject WalkService WalkService
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+<PageTitle>Generate Route – WalkMap</PageTitle>
+
+<div class="page-head">
+    <div>
+        <a class="back-link" href="/">← Back</a>
+        <h1>Generate Route</h1>
+        <p>Pick a distance — your location is auto-detected</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="form-error" style="margin-bottom:16px">@error</div>
+}
+
+<div class="map-page">
+
+    <!-- Left panel -->
+    <div class="map-panel">
+
+        <div class="panel-section">
+            <div class="panel-label">Distance</div>
+            <div class="slider-row">
+                <input type="range" min="0.5" max="20" step="0.5" class="km-slider" value="@targetKm"
+                       @oninput="OnSlider" />
+                <span class="km-badge">@targetKm.ToString("F1") km</span>
+            </div>
+            <div class="preset-row">
+                @foreach (var d in presets)
+                {
+                    <button class="preset @(targetKm == d ? "on" : "")" @onclick="SetPreset(d)">@d km</button>
+                }
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="panel-label">Your Location</div>
+            @if (locating)
+            {
+                <div class="loc-row"><span class="spin sm"></span> Detecting…</div>
+            }
+            else if (lat != 0)
+            {
+                <div class="loc-coords">@lat.ToString("F5"), @lng.ToString("F5")</div>
+            }
+            else
+            {
+                <div class="loc-error">Location unavailable — allow access and refresh</div>
+            }
+        </div>
+
+        <button class="btn-primary full-w" @onclick="Generate" disabled="@(generating || lat == 0)">
+            @if (generating)
+            {
+                <span class="spin"></span>
+                <span>Generating…</span>
+            }
+            else
+            {
+                <span>Generate Route</span>
+            }
+        </button>
+
+        @if (route != null)
+        {
+            <div class="route-info">
+                <div class="ri-row"><span>Distance</span><strong>@route.EstimatedDistanceKm.ToString("F2") km</strong></div>
+                <div class="ri-row"><span>Waypoints</span><strong>@route.Points.Count</strong></div>
+                <div class="ri-row"><span>Est. time</span><strong>~@((route.EstimatedDistanceKm / 5.0 * 60).ToString("F0"))
+                    min</strong></div>
+                </div>
+                <button class="btn-ghost full-w" @onclick="StartWalk">
+                    ▶ Start This Walk
+                </button>
+            }
+        </div>
+
+        <!-- Map -->
+        <div class="map-area">
+            <div id="wm-map" style="height:600px;width:100%"></div>
+            @if (locating)
+            {
+                <div class="map-cover">
+                    <div class="spin large"></div>
+                    <span>Getting your location…</span>
+                </div>
+            }
+        </div>
+    </div>
+
+@code {
+    double targetKm = 3.0;
+    double lat, lng;
+    bool locating = true, generating;
+    GenerateRouteResponse? route;
+    string error = "";
+    double[] presets = { 1, 3, 5, 10 };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            var pos = await JS.InvokeAsync<double[]>("wmGetLocation");
+            lat = pos[0];
+            lng = pos[1];
+            locating = false;
+            StateHasChanged();
+
+            await Task.Delay(50);
+            await JS.InvokeVoidAsync("wmInitMap", lat, lng);
+        }
+        catch (Exception ex)
+        {
+            locating = false;
+            error = "Location error: " + ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    void OnSlider(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var v)) targetKm = v;
+    }
+
+    Action SetPreset(double d) => () => targetKm = d;
+
+    async Task Generate()
+    {
+        generating = true;
+        error = "";
+        route = null;
+        StateHasChanged();
+
+        try
+        {
+            // Call WalkService which now uses ORS
+            route = await WalkService.GenerateRouteAsync(new GenerateRouteRequest
+            {
+                StartLat = lat,
+                StartLng = lng,
+                TargetDistanceKm = targetKm
+
+            });
+
+            if (route?.Points?.Any() == true)
+            {
+                var pts = route.Points
+                    .OrderBy(p => p.SequenceOrder)
+                    .Select(p => new[] { p.Latitude, p.Longitude })
+                    .ToArray();
+
+                // Draw route on Leaflet map
+                await JS.InvokeVoidAsync("wmDrawRoute", (object)pts);
+            }
+            else
+            {
+                error = "No route could be generated. Try a different distance or location.";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = "Failed to generate route: " + ex.Message;
+        }
+
+        generating = false;
+    }
+
+    void StartWalk()
+    {
+        WalkService.CurrentRoute = route;
+        Nav.NavigateTo("/walk/start");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("wmDestroyMap"); } catch { }
+    }
+}

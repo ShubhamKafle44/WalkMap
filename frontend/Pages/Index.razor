@@ -1,0 +1,99 @@
+@page "/"
+@inject WalkService WalkService
+@inject AuthStateService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard - WalkMap</PageTitle>
+
+<div class="page-head">
+    <div>
+        <h1>Dashboard</h1>
+        <p>Hey @Auth.Username, here's your activity</p>
+    </div>
+    <a href="/walk/start" class="btn-primary">+ New Walk</a>
+</div>
+
+@if (loading)
+{
+    <div class="loading-row">
+        <div class="skel"></div>
+        <div class="skel"></div>
+        <div class="skel"></div>
+        <div class="skel"></div>
+    </div>
+}
+else
+{
+    <div class="stats-row">
+        <div class="stat-box">
+            <div class="stat-num">@walks.Count</div>
+            <div class="stat-lbl">Total Walks</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-num">@totalKm.ToString("F1")</div>
+            <div class="stat-lbl">Kilometres</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-num">@FormatSteps(totalSteps)</div>
+            <div class="stat-lbl">Steps</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-num">@totalMin.ToString("F0")</div>
+            <div class="stat-lbl">Minutes</div>
+        </div>
+    </div>
+
+    <div class="section-hd">
+        <h2>Recent Walks</h2>
+        <a href="/walks">View all</a>
+    </div>
+
+    @if (recent.Any())
+    {
+        <div class="walk-list">
+            @foreach (var w in recent)
+            {
+                var walkId = w.Id;
+                <div class="walk-row" @onclick="@(e => GoToWalk(walkId))">
+                    <div class="walk-row-left">
+                        <div class="walk-row-title">@w.Title</div>
+                        <div class="walk-row-date">@w.StartedAt.ToString("MMM d, yyyy")</div>
+                    </div>
+                    <div class="walk-row-right">
+                        <span class="pill-num">@w.TotalDistanceKm.ToString("F2") km</span>
+                        <span class="pill-num">@w.StepCount.ToString("N0") steps</span>
+                        <span class="status-pill @(w.EndedAt.HasValue ? "done" : "active")">
+                            @(w.EndedAt.HasValue ? "Done" : "Active")
+                        </span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty">
+            <p>No walks yet. <a href="/walk/start">Start your first!</a></p>
+        </div>
+    }
+}
+
+@code {
+    List<WalkSummaryDto> walks = new(), recent = new();
+    double totalKm, totalMin;
+    int totalSteps;
+    bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        walks = await WalkService.GetAllAsync();
+        recent = walks.OrderByDescending(w => w.StartedAt).Take(5).ToList();
+        totalKm = walks.Sum(w => w.TotalDistanceKm);
+        totalMin = walks.Sum(w => w.DurationMinutes ?? 0);
+        totalSteps = walks.Sum(w => w.StepCount);
+        loading = false;
+    }
+
+    void GoToWalk(int id) => Nav.NavigateTo("/walks/" + id);
+    string FormatSteps(int s) => s >= 1000 ? (s / 1000.0).ToString("F1") + "k" : s.ToString();
+}

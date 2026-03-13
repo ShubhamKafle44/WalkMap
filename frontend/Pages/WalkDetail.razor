@@ -1,0 +1,80 @@
+@page "/walks/{Id:int}"
+@inject IJSRuntime JS
+@inject WalkService WalkService
+@inject NavigationManager Nav
+
+<PageTitle>Walk Detail – WalkMap</PageTitle>
+
+@if (loading) { <div class="loading-center"><div class="spin large"></div></div> }
+else if (walk == null) { <p>Walk not found. <a href="/walks">Back</a></p> }
+else
+{
+    <div class="page-head">
+        <div>
+            <a class="back-link" href="/walks">← Walks</a>
+            <h1>@walk.Title</h1>
+            <p>@walk.StartedAt.ToString("dddd, MMMM d yyyy · h:mm tt")</p>
+        </div>
+        @if (!walk.EndedAt.HasValue)
+        {
+            <a href="/walk/@walk.Id/end" class="btn-primary">End Walk</a>
+        }
+    </div>
+
+    <div class="stats-row">
+        <div class="stat-box"><div class="stat-num">@walk.TotalDistanceKm.ToString("F2")</div><div class="stat-lbl">km</div></div>
+        <div class="stat-box"><div class="stat-num">@walk.TotalDistanceMeters.ToString("F0")</div><div class="stat-lbl">meters</div></div>
+        <div class="stat-box"><div class="stat-num">@walk.StepCount.ToString("N0")</div><div class="stat-lbl">steps</div></div>
+        <div class="stat-box"><div class="stat-num">@((walk.DurationMinutes ?? 0).ToString("F0"))</div><div class="stat-lbl">minutes</div></div>
+    </div>
+<div id="wm-map" style="height:400px; width:100%; border-radius:10px; margin-top:20px;"></div>
+    <h2 style="margin:24px 0 12px;font-size:1rem;font-weight:600;">Route Points (@walk.RoutePoints.Count)</h2>
+    @if (walk.RoutePoints.Any())
+    {
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>#</th><th>Latitude</th><th>Longitude</th><th>Time</th></tr></thead>
+                <tbody>
+                    @foreach (var p in walk.RoutePoints.OrderBy(x => x.SequenceOrder))
+                    {
+                        <tr>
+                            <td>@p.SequenceOrder</td>
+                            <td>@p.Latitude.ToString("F6")</td>
+                            <td>@p.Longitude.ToString("F6")</td>
+                            <td>@p.Timestamp.ToString("HH:mm:ss")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else { <p class="muted">No route points recorded.</p> }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    WalkDetailDto? walk;
+    bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        walk = await WalkService.GetByIdAsync(Id);
+        loading = false;
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+    if (firstRender && walk != null && walk.RoutePoints.Any())
+    {
+        var first = walk.RoutePoints.First();
+
+        await JS.InvokeVoidAsync("wmInitMap", first.Latitude, first.Longitude);
+
+        var points = walk.RoutePoints
+            .OrderBy(p => p.SequenceOrder)
+            .Select(p => new double[] { p.Latitude, p.Longitude })
+            .ToArray();
+
+        await JS.InvokeVoidAsync("wmDrawRoute", points);
+    }
+}
+}

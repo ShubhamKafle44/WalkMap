@@ -1,0 +1,52 @@
+@page "/walk/start"
+@inject WalkService WalkService
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>Start Walk</PageTitle>
+<h2>@title</h2>
+
+
+<div id="wm-map" style="height:500px; width:100%; min-height:500px; display:block; position:relative;"></div>
+<div class="stats">
+    <p>Distance: @distanceKm.ToString("F2") km</p>
+</div>
+<button class="btn-primary" @onclick="EndWalk">End Walk</button>
+
+@code {
+    string title = "My Walk";
+    double distanceKm = 0;
+
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+
+        var route = WalkService.CurrentRoute;
+        if (route == null || route.Points == null || !route.Points.Any())
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        var dotNetRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("wmSetDotNetRef", dotNetRef);
+
+        var pts = route.Points
+            .OrderBy(p => p.SequenceOrder)
+            .Select(p => new[] { p.Latitude, p.Longitude })
+            .ToArray();
+
+        await Task.Delay(100); // wait for div to render
+        await JS.InvokeVoidAsync("wmStartWalkTracking", (object)pts);
+    }
+
+    [JSInvokable]
+    public void UpdateDistance(double meters)
+    {
+        distanceKm = meters / 1000;
+        StateHasChanged();
+    }
+
+    void EndWalk() => Nav.NavigateTo("/");
+}
