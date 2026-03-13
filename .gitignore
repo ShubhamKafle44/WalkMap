@@ -49,7 +49,7 @@ frontend/.DS_Store
 # Ignore environment-specific secrets
 backend/**/appsettings.Development.json
 backend/**/appsettings.Local.json
-
+backend/**/appsettings.json
 # ==========================================
 # Environment Files
 # ==========================================
