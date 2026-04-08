@@ -23,10 +23,6 @@ dotnet ef database update
 dotnet run
 ```
 
-The API will be available at `https://localhost:7xxx` and Swagger UI at `/swagger`.
-
-> **Change the JWT secret** in `appsettings.json` before deploying!
-
 ---
 
 ## Project Structure
@@ -58,8 +54,8 @@ WalkMap.Api/
 ### Auth
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/auth/register` | ❌ | Create account |
-| POST | `/api/auth/login` | ❌ | Get JWT token |
+| POST | `/api/auth/register` | Create account |
+| POST | `/api/auth/login` | Get JWT token |
 
 ### Walks (all require `Authorization: Bearer <token>`)
 | Method | Endpoint | Description |
