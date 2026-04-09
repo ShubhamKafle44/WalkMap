@@ -39,16 +39,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // ──────────────────────────────────────────────
-// CORS (allow React frontend)
+// CORS
+// FIX: Original used SetIsOriginAllowed(host == "localhost") which blocks
+//      all Azure traffic. Now reads AllowedOrigins from config so the
+//      Azure Static Web App URL can be injected as an App Setting.
 // ──────────────────────────────────────────────
+var allowedOrigins = builder.Configuration
+    .GetSection("AllowedOrigins")
+    .Get<string[]>()
+    ?? Array.Empty<string>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.SetIsOriginAllowed(origin =>
-                  new Uri(origin).Host == "localhost")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy
+            .WithOrigins(
+                "http://localhost:5000",
+                "http://localhost:5195",
+                "https://localhost:7032"
+            )
+            .WithOrigins(allowedOrigins)   // Azure Static Web App URL added here
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -68,7 +81,6 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "WalkMap API", Version = "v1" });
 
-    // Add JWT auth to Swagger UI
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
@@ -92,7 +104,7 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ──────────────────────────────────────────────
-// Auto-migrate on startup (dev convenience)
+// Auto-migrate on startup
 // ──────────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
@@ -105,11 +117,14 @@ using (var scope = app.Services.CreateScope())
 // ──────────────────────────────────────────────
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
-if (app.Environment.IsDevelopment())
+// FIX: Swagger was guarded by IsDevelopment() — Azure runs as "Production"
+//      so /swagger was always 404 in production. Now always enabled.
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "WalkMap API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");

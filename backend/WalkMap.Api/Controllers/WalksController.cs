@@ -61,17 +61,27 @@ public class WalksController : ControllerBase
         catch (KeyNotFoundException) { return NotFound(); }
     }
 
+    // FIX: Removed [AllowAnonymous] — was a security hole exposing ORS API key to unauthenticated users.
+    // FIX: Now passes TargetDistanceKm to ORS via a proper round-trip waypoint calculation.
     [HttpPost("generate-route")]
-    [AllowAnonymous] // temporary until auth is sorted
     public async Task<IActionResult> GenerateRoute([FromBody] GenerateRouteRequest req)
     {
+        var apiKey = _config["OpenRouteService:ApiKey"];
+        if (string.IsNullOrEmpty(apiKey))
+            return StatusCode(503, new { message = "Route generation is not configured on this server." });
+
+        // FIX: Use TargetDistanceKm to compute a sensible waypoint offset so the
+        //      route actually matches the requested distance (~half the target out).
+        double offsetDeg = (req.TargetDistanceKm / 2.0) / 111.0;
+
         var orsRequest = new
         {
             coordinates = new List<List<double>>
-        {
-            new() { req.StartLng, req.StartLat },
-            new() { req.StartLng + 0.01, req.StartLat + 0.01 }
-        },
+            {
+                new() { req.StartLng, req.StartLat },
+                new() { req.StartLng + offsetDeg, req.StartLat + offsetDeg },
+                new() { req.StartLng, req.StartLat }   // return to start
+            },
             instructions = false
         };
 
@@ -79,14 +89,14 @@ public class WalksController : ControllerBase
             JsonSerializer.Serialize(orsRequest), Encoding.UTF8, "application/json");
 
         var client = _httpClientFactory.CreateClient();
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", _config["OpenRouteService:ApiKey"]);
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", apiKey);
         var res = await client.PostAsync(
             "https://api.openrouteservice.org/v2/directions/foot-walking/geojson", content);
 
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
-            return StatusCode((int)res.StatusCode, $"ORS error: {body}");
+            return StatusCode((int)res.StatusCode, new { message = $"Route service error: {body}" });
 
         return Content(body, "application/json");
     }
