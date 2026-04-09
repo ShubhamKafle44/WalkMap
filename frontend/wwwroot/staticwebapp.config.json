@@ -1,0 +1,15 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/css/*", "/_framework/*", "/*.js", "/*.json", "/*.ico"]
+  },
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["anonymous"]
+    }
+  ],
+  "platform": {
+    "apiRuntime": "dotnet-isolated:8.0"
+  }
+}
