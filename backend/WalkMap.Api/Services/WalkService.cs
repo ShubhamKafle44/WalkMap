@@ -40,7 +40,8 @@ public class WalkService : IWalkService
             .FirstOrDefaultAsync(w => w.Id == walkId && w.UserId == userId)
             ?? throw new KeyNotFoundException("Walk not found.");
 
-        // Save GPS route points
+        // FIX: Save GPS route points to the DB first so they get IDs and are
+        //      fully flushed before we read them back for the distance calculation.
         int seq = 0;
         foreach (var pt in request.RoutePoints.OrderBy(p => p.SequenceOrder))
         {
@@ -53,12 +54,15 @@ public class WalkService : IWalkService
             });
         }
 
-        // Calculate total distance using Haversine
-        walk.TotalDistanceMeters = CalculateTotalDistance(walk.RoutePoints.OrderBy(p => p.SequenceOrder).ToList());
+        await _db.SaveChangesAsync(); // flush points first
+
+        // Now calculate distance against the persisted, ordered points
+        walk.TotalDistanceMeters = CalculateTotalDistance(
+            walk.RoutePoints.OrderBy(p => p.SequenceOrder).ToList());
         walk.StepCount = request.StepCount;
         walk.EndedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(); // save summary fields
         return ToDetail(walk);
     }
 
@@ -104,8 +108,8 @@ public class WalkService : IWalkService
     {
         const int numPoints = 20;
         var points = new List<WalkPointDto>();
-        double radiusKm = request.TargetDistanceKm / (2 * Math.PI); // circumference = 2πr
-        double radiusDeg = radiusKm / 111.0; // ~111 km per degree
+        double radiusKm = request.TargetDistanceKm / (2 * Math.PI);
+        double radiusDeg = radiusKm / 111.0;
 
         for (int i = 0; i <= numPoints; i++)
         {
@@ -135,7 +139,7 @@ public class WalkService : IWalkService
 
     public static double HaversineMeters(double lat1, double lon1, double lat2, double lon2)
     {
-        const double R = 6371000; // Earth radius in meters
+        const double R = 6371000;
         double phi1 = lat1 * Math.PI / 180;
         double phi2 = lat2 * Math.PI / 180;
         double dPhi = (lat2 - lat1) * Math.PI / 180;

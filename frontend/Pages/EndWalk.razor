@@ -1,9 +1,7 @@
 @page "/walk/{Id:int}/end"
 @inject WalkService WalkService
 @inject NavigationManager Nav
-
 <PageTitle>End Walk – WalkMap</PageTitle>
-
 <div class="page-head">
     <div>
         <a class="back-link" href="/walks">← Walks</a>
@@ -11,20 +9,19 @@
         <p>Record your final stats</p>
     </div>
 </div>
-
 <div class="form-card">
-    @if (error != "") { <div class="form-error">@error</div> }
-
+    @if (error != "")
+    {
+        <div class="form-error">@error</div>
+    }
     <div class="field">
         <label>Step Count</label>
         <input type="number" @bind="steps" min="0" placeholder="e.g. 5000" />
     </div>
-
     <div class="field-row-head">
         <label>Route Points</label>
         <button class="btn-sm" @onclick="AddPt">+ Add</button>
     </div>
-
     @if (pts.Any())
     {
         @for (int i = 0; i < pts.Count; i++)
@@ -42,33 +39,68 @@
     {
         <p class="muted">No points — you can end without them.</p>
     }
-
     <div class="form-actions">
         <a href="/walks" class="btn-ghost">Cancel</a>
         <button class="btn-primary" @onclick="Submit" disabled="@busy">
-            @if (busy) { <span class="spin"></span> } else { <span>End Walk</span> }
+            @if (busy)
+            {
+                <span class="spin"></span>
+            }
+            else
+            {
+
+                <span>End Walk</span>
+            }
         </button>
     </div>
 </div>
-
 @code {
     [Parameter] public int Id { get; set; }
+
     int steps;
     List<WalkPointDto> pts = new();
     string error = "";
     bool busy;
 
-    void AddPt() => pts.Add(new() { Timestamp = DateTime.UtcNow, SequenceOrder = pts.Count + 1 });
+    // SequenceOrder is 0-based to match what the backend expects
+    void AddPt() => pts.Add(new() { Timestamp = DateTime.UtcNow, SequenceOrder = pts.Count });
 
     async Task Submit()
     {
-        busy = true; error = "";
+        busy = true;
+        error = "";
         try
         {
-            var r = await WalkService.EndAsync(Id, new() { StepCount = steps, RoutePoints = pts });
-            if (r != null) Nav.NavigateTo("/walks/" + r.Id);
+            var r = await WalkService.EndAsync(Id, new EndWalkRequest
+            {
+                StepCount = steps,
+                RoutePoints = pts
+            });
+
+            if (r != null)
+            {
+                Nav.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                error = "Walk ended but the server returned no data. Check the walks list.";
+            }
         }
-        catch (Exception ex) { error = ex.Message; }
-        busy = false;
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            error = $"Walk #{Id} not found — it may belong to a different account.";
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            error = "Session expired. Please log in again.";
+        }
+        catch (Exception ex)
+        {
+            error = $"Failed to end walk: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 }

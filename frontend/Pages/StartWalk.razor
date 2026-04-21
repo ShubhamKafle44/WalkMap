@@ -1,52 +1,318 @@
+@using Microsoft.AspNetCore.Components.Web
 @page "/walk/start"
 @inject WalkService WalkService
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@implements IAsyncDisposable
 
-<PageTitle>Start Walk</PageTitle>
-<h2>@title</h2>
+<PageTitle>Walk in Progress – WalkMap</PageTitle>
 
-
-<div id="wm-map" style="height:500px; width:100%; min-height:500px; display:block; position:relative;"></div>
-<div class="stats">
-    <p>Distance: @distanceKm.ToString("F2") km</p>
+<div class="page-head">
+    <div>
+        <h1>@title</h1>
+        <p>Stay on the highlighted route</p>
+    </div>
 </div>
-<button class="btn-primary" @onclick="EndWalk">End Walk</button>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="form-error" style="margin-bottom:16px">@error</div>
+}
+
+<div class="map-page">
+
+    <!-- ── Left panel ── -->
+    <div class="map-panel">
+
+        <!-- Live stats -->
+        <div class="panel-section">
+            <div class="panel-label">Live Stats</div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-num">@distanceKm.ToString("F2")</div>
+                    <div class="stat-lbl">km</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-num">@FormatDuration(elapsedSeconds)</div>
+                    <div class="stat-lbl">duration</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-num">@stepCount.ToString("N0")</div>
+                    <div class="stat-lbl">steps</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-num">@currentSpeedKmh.ToString("F1")</div>
+                    <div class="stat-lbl">km/h</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Route progress -->
+        @if (route != null)
+        {
+            <div class="panel-section">
+                <div class="panel-label">Route Progress</div>
+                <div class="route-info">
+                    <div class="ri-row">
+                        <span>Target</span>
+                        <strong>@route.EstimatedDistanceKm.ToString("F2") km</strong>
+                    </div>
+                    <div class="ri-row">
+                        <span>Completed</span>
+                        <strong>@completionPct.ToString("F0")%</strong>
+                    </div>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill"
+                         style="width:@(Math.Min(completionPct, 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture))%">
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- GPS status -->
+        <div class="panel-section">
+            <div class="panel-label">GPS Status</div>
+            <div class="loc-row">
+                @if (locating)
+                {
+                    <span class="spin sm"></span>
+                    <span>Acquiring GPS…</span>
+                }
+                else if (gpsActive)
+                {
+                    <span class="gps-dot active"></span>
+                    <span>Tracking active</span>
+                }
+                else
+                {
+                    <span class="gps-dot inactive"></span>
+                    <span>GPS unavailable</span>
+                }
+            </div>
+            @if (currentLat != 0)
+            {
+                <div class="loc-coords" style="margin-top:4px">
+                    @currentLat.ToString("F5"), @currentLng.ToString("F5")
+                </div>
+            }
+        </div>
+
+        <!-- End walk -->
+        <button class="btn-danger full-w" @onclick="EndWalkAsync" disabled="@ending">
+            @if (ending)
+            {
+                <span class="spin"></span>
+            }
+            else
+            {
+
+                <span>■ End Walk</span>
+            }
+        </button>
+
+    </div>
+
+    <!-- ── Map ── -->
+    <div class="map-area">
+        <div id="wm-map" style="height:600px;width:100%"></div>
+        @if (locating)
+        {
+            <div class="map-cover">
+                <div class="spin large"></div>
+                <span>Acquiring GPS signal…</span>
+            </div>
+        }
+    </div>
+
+</div>
 
 @code {
+    // ── State ────────────────────────────────────────────────────────────────
     string title = "My Walk";
-    double distanceKm = 0;
+    string error = "";
+    bool ending = false;
 
+    // Walk ID assigned by the backend after StartAsync succeeds
+    int walkId = 0;
 
-    protected override async Task OnAfterRenderAsync(bool first)
+    double distanceKm;
+    double currentSpeedKmh;
+    int stepCount;
+    int elapsedSeconds;
+    double completionPct;
+
+    double currentLat, currentLng;
+    bool locating = true;
+    bool gpsActive;
+
+    GenerateRouteResponse? route;
+
+    // GPS points collected during the walk — sent to EndWalkAsync on finish
+    readonly List<WalkPointDto> trackedPoints = new();
+
+    System.Threading.Timer? _timer;
+    DotNetObjectReference<StartWalk>? _dotNetRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!first) return;
+        if (!firstRender) return;
 
-        var route = WalkService.CurrentRoute;
+        route = WalkService.CurrentRoute;
         if (route == null || route.Points == null || !route.Points.Any())
         {
             Nav.NavigateTo("/");
             return;
         }
 
-        var dotNetRef = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("wmSetDotNetRef", dotNetRef);
+        // ── 1. Create the walk record in the database ─────────────────────
+        try
+        {
+            var summary = await WalkService.StartAsync(new StartWalkRequest { Title = title });
+            if (summary == null)
+            {
+                error = "Could not start walk — server returned no data.";
+                return;
+            }
+            walkId = summary.Id;
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not start walk: {ex.Message}";
+            return;
+        }
+
+        // ── 2. Initialise the map and GPS tracking ────────────────────────
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("wmSetDotNetRef", _dotNetRef);
 
         var pts = route.Points
             .OrderBy(p => p.SequenceOrder)
             .Select(p => new[] { p.Latitude, p.Longitude })
             .ToArray();
 
-        await Task.Delay(100); // wait for div to render
-        await JS.InvokeVoidAsync("wmStartWalkTracking", (object)pts);
+        await Task.Delay(100); // ensure #wm-map is in the DOM
+
+        try
+        {
+            await JS.InvokeVoidAsync("wmStartWalkTracking", (object)pts);
+            locating = false;
+            gpsActive = true;
+        }
+        catch (Exception ex)
+        {
+            locating = false;
+            error = "GPS error: " + ex.Message;
+        }
+
+        // ── 3. Start the elapsed-time ticker ─────────────────────────────
+        _timer = new System.Threading.Timer(_ =>
+        {
+            elapsedSeconds++;
+            InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+
+        StateHasChanged();
     }
+
+    // ── JS-invokable callbacks ───────────────────────────────────────────────
 
     [JSInvokable]
     public void UpdateDistance(double meters)
     {
-        distanceKm = meters / 1000;
+        distanceKm = meters / 1000.0;
+        if (route is { EstimatedDistanceKm: > 0 })
+            completionPct = (distanceKm / route.EstimatedDistanceKm) * 100.0;
         StateHasChanged();
     }
 
-    void EndWalk() => Nav.NavigateTo("/");
+    [JSInvokable]
+    public void UpdateSpeed(double kmh)
+    {
+        currentSpeedKmh = kmh;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void UpdatePosition(double lat, double lng)
+    {
+        currentLat = lat;
+        currentLng = lng;
+        gpsActive = true;
+        locating = false;
+
+        // Record this position as a route point for saving later
+        trackedPoints.Add(new WalkPointDto
+        {
+            Latitude = lat,
+            Longitude = lng,
+            Timestamp = DateTime.UtcNow,
+            SequenceOrder = trackedPoints.Count // 0-based
+        });
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void UpdateSteps(int steps)
+    {
+        stepCount = steps;
+        StateHasChanged();
+    }
+
+    // ── End walk ─────────────────────────────────────────────────────────────
+
+    async Task EndWalkAsync()
+    {
+        ending = true;
+        error = "";
+
+        // Stop the timer so elapsed time freezes
+        _timer?.Dispose();
+        _timer = null;
+
+        try
+        {
+            if (walkId > 0)
+            {
+                await WalkService.EndAsync(walkId, new EndWalkRequest
+                {
+                    StepCount = stepCount,
+                    RoutePoints = trackedPoints
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log the error but still navigate — the walk row exists in the DB
+            // even if EndAsync fails; user can see it as "Active" in the list.
+            error = $"Walk saved but stats may be incomplete: {ex.Message}";
+            await Task.Delay(2000); // give user a moment to read the error
+        }
+        finally
+        {
+            ending = false;
+        }
+
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    static string FormatDuration(int totalSeconds)
+    {
+        int h = totalSeconds / 3600;
+        int m = (totalSeconds % 3600) / 60;
+        int s = totalSeconds % 60;
+        return h > 0 ? $"{h}:{m:D2}:{s:D2}" : $"{m:D2}:{s:D2}";
+    }
+
+    // ── Disposal ─────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        _timer?.Dispose();
+        _dotNetRef?.Dispose();
+        try { await JS.InvokeVoidAsync("wmDestroyMap"); } catch { }
+    }
 }

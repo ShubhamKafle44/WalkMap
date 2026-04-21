@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using WalkMapFrontend.Models;
-using Microsoft.Extensions.Configuration;
 using System.Text.Json;
+
 namespace WalkMapFrontend.Services;
 
 public class WalkService
@@ -10,76 +10,89 @@ public class WalkService
     private readonly HttpClient _http;
     private readonly AuthStateService _auth;
 
-
     public WalkService(HttpClient http, AuthStateService auth)
     {
         _http = http;
         _auth = auth;
     }
 
-    private void Authorize()
+    // FIX: Use a per-request message instead of mutating DefaultRequestHeaders.
+    //      Mutating shared headers is not thread-safe and can be stomped by
+    //      concurrent requests (e.g. dashboard loading while a walk ends).
+    private HttpRequestMessage AuthorizedRequest(HttpMethod method, string url)
     {
+        var req = new HttpRequestMessage(method, url);
         if (!string.IsNullOrEmpty(_auth.Token))
-            _http.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", _auth.Token);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _auth.Token);
+        return req;
     }
 
-    // Existing API methods
+    // ── Walk CRUD ──────────────────────────────────────────────────────────────
+
+    // FIX: GetFromJsonAsync silently returns null on 401/403/500.
+    //      Using SendAsync + EnsureSuccessStatusCode surfaces auth errors
+    //      instead of showing an empty dashboard.
     public async Task<List<WalkSummaryDto>> GetAllAsync()
     {
-        Authorize();
-        return await _http.GetFromJsonAsync<List<WalkSummaryDto>>("/api/Walks") ?? new();
+        var req = AuthorizedRequest(HttpMethod.Get, "/api/Walks");
+        var res = await _http.SendAsync(req);
+        res.EnsureSuccessStatusCode();
+        return await res.Content.ReadFromJsonAsync<List<WalkSummaryDto>>() ?? new();
     }
 
     public async Task<WalkDetailDto?> GetByIdAsync(int id)
     {
-        Authorize();
-        return await _http.GetFromJsonAsync<WalkDetailDto>($"/api/Walks/{id}");
+        var req = AuthorizedRequest(HttpMethod.Get, $"/api/Walks/{id}");
+        var res = await _http.SendAsync(req);
+        res.EnsureSuccessStatusCode();
+        return await res.Content.ReadFromJsonAsync<WalkDetailDto>();
     }
 
-    public async Task<WalkSummaryDto?> StartAsync(StartWalkRequest req)
+    public async Task<WalkSummaryDto?> StartAsync(StartWalkRequest body)
     {
-        Authorize();
-        var res = await _http.PostAsJsonAsync("/api/Walks/start", req);
+        var req = AuthorizedRequest(HttpMethod.Post, "/api/Walks/start");
+        req.Content = JsonContent.Create(body);
+        var res = await _http.SendAsync(req);
         res.EnsureSuccessStatusCode();
         return await res.Content.ReadFromJsonAsync<WalkSummaryDto>();
     }
 
-    public GenerateRouteResponse? CurrentRoute { get; set; }
-
-    public async Task<WalkDetailDto?> EndAsync(int id, EndWalkRequest req)
+    public async Task<WalkDetailDto?> EndAsync(int id, EndWalkRequest body)
     {
-        Authorize();
-        var res = await _http.PutAsJsonAsync($"/api/Walks/{id}/end", req);
+        var req = AuthorizedRequest(HttpMethod.Put, $"/api/Walks/{id}/end");
+        req.Content = JsonContent.Create(body);
+        var res = await _http.SendAsync(req);
         res.EnsureSuccessStatusCode();
         return await res.Content.ReadFromJsonAsync<WalkDetailDto>();
     }
 
     public async Task DeleteAsync(int id)
     {
-        Authorize();
-        var res = await _http.DeleteAsync($"/api/Walks/{id}");
+        var req = AuthorizedRequest(HttpMethod.Delete, $"/api/Walks/{id}");
+        var res = await _http.SendAsync(req);
         res.EnsureSuccessStatusCode();
     }
 
-    // -----------------------
-    // Generate a real walking route using OpenRouteService
-    // -----------------------
-    public async Task<GenerateRouteResponse?> GenerateRouteAsync(GenerateRouteRequest req)
+    // ── Route Generation ───────────────────────────────────────────────────────
+
+    public GenerateRouteResponse? CurrentRoute { get; set; }
+
+    public async Task<GenerateRouteResponse?> GenerateRouteAsync(GenerateRouteRequest body)
     {
-        Authorize();
-        var res = await _http.PostAsJsonAsync("/api/Walks/generate-route", req);
-        var body = await res.Content.ReadAsStringAsync();
+        var req = AuthorizedRequest(HttpMethod.Post, "/api/Walks/generate-route");
+        req.Content = JsonContent.Create(body);
+
+        var res = await _http.SendAsync(req);
+        var rawBody = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
-            throw new Exception($"Route error {res.StatusCode}: {body}");
+            throw new Exception($"Route error {res.StatusCode}: {rawBody}");
 
-        // Backend returns ORS JSON directly — deserialize as ORSResponse
-        var data = JsonSerializer.Deserialize<ORSResponse>(body,
+        var data = JsonSerializer.Deserialize<ORSResponse>(rawBody,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         if (data?.Features == null || !data.Features.Any())
-            throw new Exception($"No route returned. Raw response: {body}");
+            throw new Exception($"No route returned. Raw response: {rawBody}");
 
         var feature = data.Features[0];
         var route = new GenerateRouteResponse
@@ -99,4 +112,3 @@ public class WalkService
         return route;
     }
 }
-

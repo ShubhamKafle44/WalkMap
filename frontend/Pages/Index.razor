@@ -2,17 +2,17 @@
 @inject WalkService WalkService
 @inject AuthStateService Auth
 @inject NavigationManager Nav
-
+@implements IDisposable
 <PageTitle>Dashboard - WalkMap</PageTitle>
-
 <div class="page-head">
     <div>
         <h1>Dashboard</h1>
         <p>Hey @Auth.Username, here's your activity</p>
     </div>
-    <a href="/walk/start" class="btn-primary">+ New Walk</a>
+    <button class="btn-primary" @onclick="GoToGenerate">
+        + New Walk
+    </button>
 </div>
-
 @if (loading)
 {
     <div class="loading-row">
@@ -24,6 +24,10 @@
 }
 else
 {
+    @if (error != "")
+    {
+        <div class="form-error">@error</div>
+    }
     <div class="stats-row">
         <div class="stat-box">
             <div class="stat-num">@walks.Count</div>
@@ -42,19 +46,16 @@ else
             <div class="stat-lbl">Minutes</div>
         </div>
     </div>
-
     <div class="section-hd">
         <h2>Recent Walks</h2>
         <a href="/walks">View all</a>
     </div>
-
     @if (recent.Any())
     {
         <div class="walk-list">
             @foreach (var w in recent)
             {
-                var walkId = w.Id;
-                <div class="walk-row" @onclick="@(e => GoToWalk(walkId))">
+                <div class="walk-row" @onclick="() => GoToWalk(w.Id)">
                     <div class="walk-row-left">
                         <div class="walk-row-title">@w.Title</div>
                         <div class="walk-row-date">@w.StartedAt.ToString("MMM d, yyyy")</div>
@@ -77,23 +78,76 @@ else
         </div>
     }
 }
-
 @code {
-    List<WalkSummaryDto> walks = new(), recent = new();
-    double totalKm, totalMin;
+    List<WalkSummaryDto> walks = new();
+    List<WalkSummaryDto> recent = new();
+    double totalKm;
+    double totalMin;
     int totalSteps;
     bool loading = true;
+    string error = "";
 
-    protected override async Task OnInitializedAsync()
+    // Track whether we've done the first render load so we don't double-fetch
+    bool _loaded = false;
+
+    protected override void OnInitialized()
     {
-        walks = await WalkService.GetAllAsync();
-        recent = walks.OrderByDescending(w => w.StartedAt).Take(5).ToList();
-        totalKm = walks.Sum(w => w.TotalDistanceKm);
-        totalMin = walks.Sum(w => w.DurationMinutes ?? 0);
-        totalSteps = walks.Sum(w => w.StepCount);
-        loading = false;
+        // Subscribe to location changes so navigating back to "/" always refreshes
+        Nav.LocationChanged += OnLocationChanged;
     }
 
-    void GoToWalk(int id) => Nav.NavigateTo("/walks/" + id);
+    // OnAfterRenderAsync with firstRender guarantees JS interop (for localStorage)
+    // is ready and runs every time this page is navigated to via forceLoad
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_loaded)
+        {
+            await LoadWalksAsync();
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Re-fetch when the user lands on "/" from another page
+        if (new Uri(e.Location).AbsolutePath == "/")
+        {
+            await LoadWalksAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadWalksAsync()
+    {
+        loading = true;
+        error = "";
+        _loaded = true;
+        try
+        {
+            walks = await WalkService.GetAllAsync();
+            recent = walks.OrderByDescending(w => w.StartedAt).Take(5).ToList();
+            totalKm = walks.Sum(w => w.TotalDistanceKm);
+            totalMin = walks.Sum(w => w.DurationMinutes ?? 0);
+            totalSteps = walks.Sum(w => w.StepCount);
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not load walks: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+
+    void GoToGenerate() => Nav.NavigateTo("/route/generate");
+    void GoToWalk(int id) => Nav.NavigateTo($"/walks/{id}");
     string FormatSteps(int s) => s >= 1000 ? (s / 1000.0).ToString("F1") + "k" : s.ToString();
 }
+
+ 

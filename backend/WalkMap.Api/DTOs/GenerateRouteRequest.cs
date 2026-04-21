@@ -1,8 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace WalkMap.Api.DTOs;
 
-public class GenerateRouteRequest
-{
-    public double StartLat { get; set; }
-    public double StartLng { get; set; }
-    public double TargetDistanceKm { get; set; } = 3.0;
-}
+public record GenerateRouteRequest(
+    [property: JsonPropertyName("startLat")] double StartLat,
+    [property: JsonPropertyName("startLng")] double StartLng,
+    [property: JsonPropertyName("targetDistanceKm")] double TargetDistanceKm
+);

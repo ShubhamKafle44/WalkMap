@@ -26,6 +26,8 @@ public class WalksController : ControllerBase
 
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    // ── Walk CRUD ──────────────────────────────────────────────────────────────
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<WalkSummaryDto>>> GetHistory()
     {
@@ -61,8 +63,16 @@ public class WalksController : ControllerBase
         catch (KeyNotFoundException) { return NotFound(); }
     }
 
-    // FIX: Removed [AllowAnonymous] — was a security hole exposing ORS API key to unauthenticated users.
-    // FIX: Now passes TargetDistanceKm to ORS via a proper round-trip waypoint calculation.
+    // ── Circular Route Generation ──────────────────────────────────────────────
+    //
+    //  Strategy: place two intermediate waypoints at roughly 1/3 and 2/3 of the
+    //  circumference of a circle of radius = targetDistanceKm / (2π).  Using two
+    //  waypoints displaced in perpendicular directions (North-East and South-East)
+    //  produces a more realistic loop than the previous single diagonal waypoint,
+    //  and both ORS legs are constrained to real footpaths.
+    //
+    //  The final coordinate equals the first, guaranteeing a closed loop.
+
     [HttpPost("generate-route")]
     public async Task<IActionResult> GenerateRoute([FromBody] GenerateRouteRequest req)
     {
@@ -70,29 +80,43 @@ public class WalksController : ControllerBase
         if (string.IsNullOrEmpty(apiKey))
             return StatusCode(503, new { message = "Route generation is not configured on this server." });
 
-        // FIX: Use TargetDistanceKm to compute a sensible waypoint offset so the
-        //      route actually matches the requested distance (~half the target out).
-        double offsetDeg = (req.TargetDistanceKm / 2.0) / 111.0;
+        // Radius of a circle whose circumference equals the target distance
+        double radiusKm = req.TargetDistanceKm / (2 * Math.PI);
+        double radiusDeg = radiusKm / 111.0;   // ~111 km per degree of latitude
+
+        // Longitude degrees per km varies with latitude
+        double lngScale = 1.0 / Math.Cos(req.StartLat * Math.PI / 180.0);
+
+        // Waypoint A: bearing 60° (roughly NE)
+        double wA_lat = req.StartLat + radiusDeg * Math.Cos(60.0 * Math.PI / 180.0);
+        double wA_lng = req.StartLng + radiusDeg * lngScale * Math.Sin(60.0 * Math.PI / 180.0);
+
+        // Waypoint B: bearing 180° (South) — creates a proper loop rather than an out-and-back
+        double wB_lat = req.StartLat + radiusDeg * Math.Cos(180.0 * Math.PI / 180.0);
+        double wB_lng = req.StartLng + radiusDeg * lngScale * Math.Sin(180.0 * Math.PI / 180.0);
 
         var orsRequest = new
         {
             coordinates = new List<List<double>>
             {
-                new() { req.StartLng, req.StartLat },
-                new() { req.StartLng + offsetDeg, req.StartLat + offsetDeg },
-                new() { req.StartLng, req.StartLat }   // return to start
+                new() { req.StartLng, req.StartLat },   // origin
+                new() { wA_lng,       wA_lat       },   // 1st waypoint
+                new() { wB_lng,       wB_lat       },   // 2nd waypoint
+                new() { req.StartLng, req.StartLat },   // back to origin — closes the loop
             },
             instructions = false
         };
 
         var content = new StringContent(
-            JsonSerializer.Serialize(orsRequest), Encoding.UTF8, "application/json");
+            JsonSerializer.Serialize(orsRequest),
+            Encoding.UTF8,
+            "application/json");
 
         var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", apiKey);
+
         var res = await client.PostAsync(
             "https://api.openrouteservice.org/v2/directions/foot-walking/geojson", content);
-
         var body = await res.Content.ReadAsStringAsync();
 
         if (!res.IsSuccessStatusCode)
