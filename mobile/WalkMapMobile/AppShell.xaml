@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:views="clr-namespace:WalkMapMobile.Views"
+       x:Class="WalkMapMobile.AppShell"
+       Shell.NavBarIsVisible="False">
+
+    <!-- Auth pages (no tab bar) -->
+    <ShellContent Route="login"
+                  ContentTemplate="{DataTemplate views:LoginPage}"
+                  Shell.NavBarIsVisible="False"/>
+
+    <ShellContent Route="register"
+                  ContentTemplate="{DataTemplate views:RegisterPage}"
+                  Shell.NavBarIsVisible="False"/>
+
+    <!-- Main app -->
+    <ShellContent Route="history"
+                  ContentTemplate="{DataTemplate views:WalkHistoryPage}"
+                  Shell.NavBarIsVisible="False"/>
+
+</Shell>

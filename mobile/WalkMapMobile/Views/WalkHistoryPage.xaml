@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:WalkMapMobile.Models"
+             x:Class="WalkMapMobile.Views.WalkHistoryPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#0F1923">
+
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- Header -->
+        <Grid Grid.Row="0"
+                Padding="24,52,24,16"
+              ColumnDefinitions="*,Auto"
+              BackgroundColor="#0F1923">
+
+            <VerticalStackLayout Grid.Column="0">
+                <Label Text="My Walks"
+                        FontSize="28"
+                        FontAttributes="Bold"
+                        TextColor="White"/>
+                <Label Text="{Binding Username, StringFormat='Hello, {0} 👋'}"
+                       FontSize="14"
+                        TextColor="#7A8FA6"/>
+            </VerticalStackLayout>
+
+            <!-- Logout -->
+            <Button Grid.Column="1"
+                    Text="↩"
+                    Command="{Binding LogoutCommand}"
+                    BackgroundColor="#172130"
+                    TextColor="#7A8FA6"
+                    CornerRadius="20"
+                    WidthRequest="40"
+                    HeightRequest="40"
+                    Padding="0"/>
+        </Grid>
+
+        <!-- Content -->
+        <RefreshView Grid.Row="1"
+                     Command="{Binding RefreshCommand}"
+                     IsRefreshing="{Binding IsBusy}"
+                     RefreshColor="#4CAF50">
+
+            <Grid>
+                <!-- Empty state -->
+                <VerticalStackLayout IsVisible="{Binding IsEmpty}"
+                                     HorizontalOptions="Center"
+                                     VerticalOptions="Center"
+                                     Spacing="12">
+                    <Label Text="🚶"
+                            FontSize="64"
+                            HorizontalOptions="Center"/>
+                    <Label Text="No walks yet"
+                            FontSize="20"
+                            FontAttributes="Bold"
+                           TextColor="White"
+                            HorizontalOptions="Center"/>
+                    <Label Text="Tap the button below to start your first walk"
+                           FontSize="14"
+                            TextColor="#7A8FA6"
+                           HorizontalOptions="Center"
+                            HorizontalTextAlignment="Center"/>
+                </VerticalStackLayout>
+
+                <!-- Walk list -->
+                <CollectionView ItemsSource="{Binding Walks}"
+                                IsVisible="{Binding IsEmpty, Converter={StaticResource InvertBool}}"
+                                Margin="0,0,0,100">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:WalkSummary">
+                            <SwipeView>
+                                <SwipeView.RightItems>
+                                    <SwipeItems>
+                                        <SwipeItem Text="Delete"
+                                                   BackgroundColor="#FF4444"
+                                                   Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeleteWalkCommand}"
+                                                   CommandParameter="{Binding .}"/>
+                                    </SwipeItems>
+                                </SwipeView.RightItems>
+
+                                <Border Margin="16,6,16,6"
+                                        BackgroundColor="#172130"
+                                        Stroke="#1E2D3D"
+                                        StrokeThickness="1"
+                                        StrokeShape="RoundRectangle 16"
+                                        Padding="16">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.ViewWalkCommand}"
+                                            CommandParameter="{Binding .}"/>
+                                    </Border.GestureRecognizers>
+
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <!-- Icon -->
+                                        <Border Grid.Column="0"
+                                                BackgroundColor="#0D2818"
+                                                StrokeShape="RoundRectangle 12"
+                                                Stroke="Transparent"
+                                                WidthRequest="48"
+                                                HeightRequest="48"
+                                                Margin="0,0,12,0">
+                                            <Label Text="🗺️"
+                                                    FontSize="22"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center"/>
+                                        </Border>
+
+                                        <!-- Info -->
+                                        <VerticalStackLayout Grid.Column="1"
+                                                Spacing="2">
+                                            <Label Text="{Binding Title}"
+                                                   FontSize="16"
+                                                    FontAttributes="Bold"
+                                                   TextColor="White"/>
+                                            <Label Text="{Binding DateDisplay}"
+                                                   FontSize="12"
+                                                    TextColor="#7A8FA6"/>
+                                            <HorizontalStackLayout Spacing="12"
+                                                    Margin="0,4,0,0">
+                                                <Label Text="{Binding DistanceDisplay}"
+                                                       FontSize="13"
+                                                        TextColor="#4CAF50"
+                                                       FontAttributes="Bold"/>
+                                                <Label Text="{Binding StepCount, StringFormat='{0} steps'}"
+                                                       FontSize="13"
+                                                        TextColor="#7A8FA6"/>
+                                            </HorizontalStackLayout>
+                                        </VerticalStackLayout>
+
+                                        <!-- Duration -->
+                                        <Label Grid.Column="2"
+                                               Text="{Binding DurationDisplay}"
+                                               FontSize="12"
+                                                TextColor="#7A8FA6"
+                                               VerticalOptions="Center"/>
+                                    </Grid>
+                                </Border>
+                            </SwipeView>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </RefreshView>
+
+        <!-- Floating Action Buttons -->
+        <HorizontalStackLayout Grid.Row="1"
+                               HorizontalOptions="Center"
+                               VerticalOptions="End"
+                               Spacing="12"
+                               Margin="0,0,0,32">
+
+            <Button Text="🗺️  Generate Route"
+                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.GoToGenerateRouteCommand}"
+                    BackgroundColor="#172130"
+                    TextColor="White"
+                    CornerRadius="24"
+                    HeightRequest="48"
+                    Padding="20,0"
+                    FontSize="14"/>
+
+            <Button Text="＋  Start Walk"
+                    Command="{Binding StartNewWalkCommand}"
+                    BackgroundColor="#4CAF50"
+                    TextColor="White"
+                    FontAttributes="Bold"
+                    CornerRadius="24"
+                    HeightRequest="48"
+                    Padding="20,0"
+                    FontSize="14"/>
+        </HorizontalStackLayout>
+
+    </Grid>
+</ContentPage>

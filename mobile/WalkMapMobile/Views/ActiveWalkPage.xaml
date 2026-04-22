@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="clr-namespace:Microsoft.Maui.Controls.Maps;assembly=Microsoft.Maui.Controls.Maps"
+             x:Class="WalkMapMobile.Views.ActiveWalkPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#0F1923">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Top Bar -->
+        <Grid Grid.Row="0" Padding="20,52,20,16"
+              ColumnDefinitions="Auto,*,Auto"
+              BackgroundColor="#0F1923">
+
+            <Button Grid.Column="0"
+                    Text="✕"
+                    Command="{Binding CancelCommand}"
+                    IsVisible="{Binding IsWalking, Converter={StaticResource InvertBool}}"
+                    BackgroundColor="#172130"
+                    TextColor="#7A8FA6"
+                    CornerRadius="20"
+                    WidthRequest="40" HeightRequest="40"
+                    Padding="0"/>
+
+            <Label Grid.Column="1"
+                   Text="{Binding WalkTitle}"
+                   FontSize="18" FontAttributes="Bold"
+                   TextColor="White"
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center"/>
+
+            <!-- Timer (visible during walk) -->
+            <Border Grid.Column="2"
+                    IsVisible="{Binding IsWalking}"
+                    BackgroundColor="#0D2818"
+                    StrokeShape="RoundRectangle 12"
+                    Stroke="Transparent"
+                    Padding="10,6">
+                <Label Text="{Binding ElapsedTime}"
+                       FontSize="16" FontAttributes="Bold"
+                       TextColor="#4CAF50"/>
+            </Border>
+        </Grid>
+
+        <!-- Map -->
+        <maps:Map x:Name="WalkMap"
+                  Grid.Row="1"
+                  MapType="Street"
+                  IsShowingUser="True"/>
+
+        <!-- Bottom Panel -->
+        <Grid Grid.Row="2" BackgroundColor="#0F1923" Padding="20,16,20,36">
+
+            <!-- Pre-walk: Title entry + Start -->
+            <VerticalStackLayout IsVisible="{Binding IsNotWalking}" Spacing="12">
+                <Label Text="Name your walk" TextColor="#7A8FA6" FontSize="13"/>
+                <Border Stroke="#1E2D3D" StrokeThickness="1" BackgroundColor="#172130"
+                        StrokeShape="RoundRectangle 12" Padding="16,0">
+                    <Entry Text="{Binding WalkTitle}"
+                           Placeholder="e.g. Morning Walk"
+                           PlaceholderColor="#3A4F63"
+                           TextColor="White"
+                           BackgroundColor="Transparent"/>
+                </Border>
+
+                <Label Text="{Binding ErrorMessage}"
+                       TextColor="#FF6B6B" FontSize="13"
+                       IsVisible="{Binding HasError}"/>
+
+                <Button Text="Start Walking 🚶"
+                        Command="{Binding StartWalkCommand}"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBool}}"
+                        BackgroundColor="#4CAF50"
+                        TextColor="White"
+                        FontAttributes="Bold"
+                        CornerRadius="14"
+                        HeightRequest="52"/>
+
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   IsVisible="{Binding IsBusy}"
+                                   Color="#4CAF50"/>
+            </VerticalStackLayout>
+
+            <!-- During-walk: Stats + End -->
+            <Grid IsVisible="{Binding IsWalking}"
+                  RowDefinitions="Auto,Auto"
+                  RowSpacing="16">
+
+                <!-- Stats row -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,*,*" ColumnSpacing="8">
+
+                    <Border Grid.Column="0" BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 12" Stroke="Transparent" Padding="12,10">
+                        <VerticalStackLayout HorizontalOptions="Center">
+                            <Label Text="{Binding Distance}"
+                                   FontSize="18" FontAttributes="Bold"
+                                   TextColor="#4CAF50"
+                                   HorizontalOptions="Center"/>
+                            <Label Text="Distance" FontSize="11"
+                                   TextColor="#7A8FA6"
+                                   HorizontalOptions="Center"/>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Grid.Column="1" BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 12" Stroke="Transparent" Padding="12,10">
+                        <VerticalStackLayout HorizontalOptions="Center">
+                            <Label Text="{Binding StepCount}"
+                                   FontSize="18" FontAttributes="Bold"
+                                   TextColor="#4CAF50"
+                                   HorizontalOptions="Center"/>
+                            <Label Text="Steps" FontSize="11"
+                                   TextColor="#7A8FA6"
+                                   HorizontalOptions="Center"/>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Grid.Column="2" BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 12" Stroke="Transparent" Padding="12,10">
+                        <VerticalStackLayout HorizontalOptions="Center">
+                            <Label Text="{Binding ElapsedTime}"
+                                   FontSize="18" FontAttributes="Bold"
+                                   TextColor="#4CAF50"
+                                   HorizontalOptions="Center"/>
+                            <Label Text="Time" FontSize="11"
+                                   TextColor="#7A8FA6"
+                                   HorizontalOptions="Center"/>
+                        </VerticalStackLayout>
+                    </Border>
+                </Grid>
+
+                <!-- End Walk -->
+                <Button Grid.Row="1"
+                        Text="End Walk"
+                        Command="{Binding EndWalkCommand}"
+                        IsEnabled="{Binding IsBusy, Converter={StaticResource InvertBool}}"
+                        BackgroundColor="#FF4444"
+                        TextColor="White"
+                        FontAttributes="Bold"
+                        CornerRadius="14"
+                        HeightRequest="52"/>
+            </Grid>
+
+        </Grid>
+    </Grid>
+</ContentPage>

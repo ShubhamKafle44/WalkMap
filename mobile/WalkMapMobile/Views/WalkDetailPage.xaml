@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="clr-namespace:Microsoft.Maui.Controls.Maps;assembly=Microsoft.Maui.Controls.Maps"
+             x:Class="WalkMapMobile.Views.WalkDetailPage"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="#0F1923">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Header -->
+        <Grid Grid.Row="0" Padding="20,52,20,16"
+              ColumnDefinitions="Auto,*,Auto"
+              BackgroundColor="#0F1923">
+
+            <Button Grid.Column="0"
+                    Text="←"
+                    Command="{Binding BackCommand}"
+                    BackgroundColor="#172130"
+                    TextColor="White"
+                    CornerRadius="20"
+                    WidthRequest="40" HeightRequest="40"
+                    Padding="0"/>
+
+            <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                <Label Text="{Binding Walk.Title}"
+                       FontSize="18" FontAttributes="Bold"
+                       TextColor="White"
+                       HorizontalOptions="Center"/>
+                <Label Text="{Binding Walk.DateDisplay}"
+                       FontSize="12" TextColor="#7A8FA6"
+                       HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+
+            <Button Grid.Column="2"
+                    Text="🗑"
+                    Command="{Binding DeleteCommand}"
+                    BackgroundColor="#2D1515"
+                    TextColor="#FF4444"
+                    CornerRadius="20"
+                    WidthRequest="40" HeightRequest="40"
+                    Padding="0"/>
+        </Grid>
+
+        <!-- Map -->
+        <maps:Map x:Name="DetailMap"
+                  Grid.Row="1"
+                  MapType="Street"/>
+
+        <!-- Stats Panel -->
+        <ScrollView Grid.Row="2">
+            <VerticalStackLayout Padding="20,16,20,40" Spacing="12">
+
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   IsVisible="{Binding IsBusy}"
+                                   Color="#4CAF50"/>
+
+                <!-- Stats Grid -->
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
+                      ColumnSpacing="10" RowSpacing="10"
+                      IsVisible="{Binding IsBusy, Converter={StaticResource InvertBool}}">
+
+                    <Border Grid.Row="0" Grid.Column="0"
+                            BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 14"
+                            Stroke="Transparent" Padding="16,12">
+                        <VerticalStackLayout>
+                            <Label Text="📍 Distance" FontSize="12" TextColor="#7A8FA6"/>
+                            <Label Text="{Binding Walk.DistanceDisplay}"
+                                   FontSize="22" FontAttributes="Bold" TextColor="#4CAF50"/>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Grid.Row="0" Grid.Column="1"
+                            BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 14"
+                            Stroke="Transparent" Padding="16,12">
+                        <VerticalStackLayout>
+                            <Label Text="👣 Steps" FontSize="12" TextColor="#7A8FA6"/>
+                            <Label Text="{Binding Walk.StepCount}"
+                                   FontSize="22" FontAttributes="Bold" TextColor="#4CAF50"/>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Grid.Row="1" Grid.Column="0"
+                            BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 14"
+                            Stroke="Transparent" Padding="16,12">
+                        <VerticalStackLayout>
+                            <Label Text="⏱ Duration" FontSize="12" TextColor="#7A8FA6"/>
+                            <Label Text="{Binding Walk.DurationDisplay}"
+                                   FontSize="22" FontAttributes="Bold" TextColor="#4CAF50"/>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Grid.Row="1" Grid.Column="1"
+                            BackgroundColor="#172130"
+                            StrokeShape="RoundRectangle 14"
+                            Stroke="Transparent" Padding="16,12">
+                        <VerticalStackLayout>
+                            <Label Text="📊 GPS Points" FontSize="12" TextColor="#7A8FA6"/>
+                            <Label Text="{Binding Walk.RoutePoints.Count}"
+                                   FontSize="22" FontAttributes="Bold" TextColor="#4CAF50"/>
+                        </VerticalStackLayout>
+                    </Border>
+                </Grid>
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+    </Grid>
+</ContentPage>
