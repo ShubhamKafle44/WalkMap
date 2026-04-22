@@ -38,31 +38,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// ──────────────────────────────────────────────
-// CORS
-// FIX: Original used SetIsOriginAllowed(host == "localhost") which blocks
-//      all Azure traffic. Now reads AllowedOrigins from config so the
-//      Azure Static Web App URL can be injected as an App Setting.
-// ──────────────────────────────────────────────
-var allowedOrigins = builder.Configuration
-    .GetSection("AllowedOrigins")
-    .Get<string[]>()
-    ?? Array.Empty<string>();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-});
-
-// ──────────────────────────────────────────────
-// Services
-// ──────────────────────────────────────────────
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWalkService, WalkService>();
 
@@ -101,6 +77,9 @@ var app = builder.Build();
 // ──────────────────────────────────────────────
 // Auto-migrate on startup
 // ──────────────────────────────────────────────
+
+app.UseCors("AllowAll");
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -122,7 +101,6 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseHttpsRedirection();
-app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
