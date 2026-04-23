@@ -16,12 +16,11 @@ builder.Services.AddScoped<WalkService>();
 // FIX: Was hardcoded to "http://localhost:5195" — breaks in Azure.
 //      Now reads ApiBaseUrl from wwwroot/appsettings.json which can be
 //      swapped per environment without rebuilding the app.
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
-    ?? "http://localhost:5195";
+var apiBaseUrl = builder.Configuration.GetConnectionString("APIEndpoint");
 
 builder.Services.AddScoped(sp => new HttpClient
 {
-    BaseAddress = new Uri("http://localhost:5195")
+    BaseAddress = new Uri(apiBaseUrl)
 });
 
 await builder.Build().RunAsync();

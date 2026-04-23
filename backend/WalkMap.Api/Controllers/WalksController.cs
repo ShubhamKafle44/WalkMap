@@ -76,7 +76,7 @@ public class WalksController : ControllerBase
     [HttpPost("generate-route")]
     public async Task<IActionResult> GenerateRoute([FromBody] GenerateRouteRequest req)
     {
-        var apiKey = _config["OpenRouteService:ApiKey"];
+        var apiKey = _config.GetConnectionString("OpenRouteService");
         if (string.IsNullOrEmpty(apiKey))
             return StatusCode(503, new { message = "Route generation is not configured on this server." });
 

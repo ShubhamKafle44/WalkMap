@@ -55,7 +55,7 @@ public class AuthService : IAuthService
     public string GenerateToken(User user)
     {
         var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
+            Encoding.UTF8.GetBytes(_config.GetConnectionString("JWTKey")!));
 
         var claims = new[]
         {
@@ -65,8 +65,8 @@ public class AuthService : IAuthService
         };
 
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
+            issuer: _config.GetConnectionString("JWTIssuer"),
+            audience: _config.GetConnectionString("JWTAudience"),
             claims: claims,
             expires: DateTime.UtcNow.AddDays(7),
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)

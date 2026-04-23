@@ -1,3 +1,9 @@
 <Solution>
-  <Project Path="WalkMap.Api/WalkMap.Api.csproj" />
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="ARM32" />
+  </Configurations>
+  <Project Path="WalkMap.Api/WalkMap.Api.csproj">
+    <Platform Solution="*|ARM32" Project="ARM32" />
+  </Project>
 </Solution>

@@ -18,7 +18,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ──────────────────────────────────────────────
 // Authentication (JWT)
 // ──────────────────────────────────────────────
-var jwtKey = builder.Configuration["Jwt:Key"]
+var jwtKey = builder.Configuration.GetConnectionString("JWTKey")
     ?? throw new InvalidOperationException("JWT key not configured.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -30,8 +30,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = builder.Configuration.GetConnectionString("JWTIssuer"),
+            ValidAudience = builder.Configuration.GetConnectionString("JWTAudience"),
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
@@ -48,6 +48,18 @@ builder.Services.AddScoped<IWalkService, WalkService>();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "WalkMap API", Version = "v1" });
@@ -78,28 +90,23 @@ var app = builder.Build();
 // Auto-migrate on startup
 // ──────────────────────────────────────────────
 
-app.UseCors("AllowAll");
+
 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+   // await db.Database.MigrateAsync();
 }
 
-// ──────────────────────────────────────────────
-// Middleware pipeline
-// ──────────────────────────────────────────────
-app.UseMiddleware<GlobalExceptionMiddleware>();
 
-// FIX: Swagger was guarded by IsDevelopment() — Azure runs as "Production"
-//      so /swagger was always 404 in production. Now always enabled.
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "WalkMap API v1");
+    c.SwaggerEndpoint("/swagger/v1/swagger.json"," ");
     c.RoutePrefix = "swagger";
 });
 
+app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
